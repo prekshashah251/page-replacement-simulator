@@ -1,0 +1,648 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Page Replacement Simulator</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f1f5f9;
+  color: #172033;
+  line-height: 1.5;
+}
+
+header {
+  background: #14213d;
+  color: white;
+  padding: 25px 18px;
+  text-align: center;
+}
+
+header h1 { margin: 0 0 8px; }
+header p { margin: 0; }
+
+main {
+  max-width: 1100px;
+  margin: auto;
+  padding: 20px;
+}
+
+.panel {
+  background: white;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+h2 { color: #14213d; margin-top: 0; }
+
+.controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 6px;
+}
+
+input, select {
+  width: 100%;
+  padding: 11px;
+  border: 1px solid #bdc9da;
+  border-radius: 7px;
+  font-size: 15px;
+}
+
+.full { grid-column: 1 / -1; }
+
+button {
+  padding: 10px 14px;
+  margin: 12px 5px 0 0;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.primary { background: #2563eb; color: white; }
+.secondary { background: #e2e8f0; color: #172033; }
+.dark { background: #14213d; color: white; }
+
+button:hover { opacity: 0.85; }
+
+.help, .muted { color: #64748b; font-size: 14px; }
+
+.error {
+  display: none;
+  color: #991b1b;
+  background: #fee2e2;
+  padding: 10px;
+  border-radius: 7px;
+  margin-top: 12px;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.metric {
+  padding: 13px;
+  border: 1px solid #dbe3ef;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.metric span {
+  display: block;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.metric strong {
+  display: block;
+  font-size: 22px;
+  color: #14213d;
+}
+
+.comparison {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.algo {
+  border: 1px solid #dbe3ef;
+  padding: 14px;
+  border-radius: 9px;
+}
+
+.algo h3 { margin-top: 0; }
+
+.table-wrap { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 650px;
+  font-size: 14px;
+}
+
+th, td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid #dbe3ef;
+}
+
+th { background: #eaf0f8; }
+
+.hit { color: #15803d; font-weight: bold; }
+.fault { color: #b91c1c; font-weight: bold; }
+
+.frame {
+  display: inline-block;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 3px 8px;
+  margin: 2px;
+  background: #f8fafc;
+}
+
+.learning {
+  padding: 12px;
+  border-radius: 8px;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+}
+
+footer {
+  text-align: center;
+  color: #64748b;
+  padding: 15px;
+}
+
+@media (max-width: 700px) {
+  .controls, .comparison { grid-template-columns: 1fr; }
+  .metrics { grid-template-columns: repeat(2, 1fr); }
+  .full { grid-column: auto; }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>Page Replacement Simulator</h1>
+  <p>Operating Systems | Stage 3 Project</p>
+  <p>FIFO, LRU and Adaptive LRU/MRU</p>
+</header>
+
+<main>
+
+<section class="panel">
+  <h2>1. Simulation Inputs</h2>
+
+  <div class="controls">
+    <div>
+      <label for="frameCount">Number of Memory Frames</label>
+      <input id="frameCount" type="number" min="1" max="20" value="3">
+      <p class="help">Enter a number from 1 to 20.</p>
+    </div>
+
+    <div>
+      <label for="algorithm">Select Algorithm</label>
+      <select id="algorithm">
+        <option value="COMPARE">Compare All Algorithms</option>
+        <option value="FIFO">FIFO</option>
+        <option value="LRU">LRU</option>
+        <option value="ADAPTIVE">Adaptive LRU/MRU</option>
+      </select>
+    </div>
+
+    <div class="full">
+      <label for="reference">Page Reference String</label>
+      <input id="reference" value="1 2 3 1 4 2 5 1 2 3">
+      <p class="help">Example: 1 2 3 1 4 2 5 1 2 3</p>
+    </div>
+  </div>
+
+  <button class="primary" id="runBtn">Start Simulation</button>
+  <button class="secondary" id="stepBtn">Next Step</button>
+  <button class="secondary" id="traceBtn">Show Full Trace</button>
+  <button class="dark" id="resetBtn">Reset</button>
+
+  <div class="error" id="errorBox"></div>
+  <p id="status" class="muted">Enter your inputs and start the simulation.</p>
+</section>
+
+<section class="panel">
+  <h2>2. Results Summary</h2>
+
+  <div class="metrics">
+    <div class="metric"><span>Page Requests</span><strong id="requests">—</strong></div>
+    <div class="metric"><span>Page Hits</span><strong id="hits">—</strong></div>
+    <div class="metric"><span>Page Faults</span><strong id="faults">—</strong></div>
+    <div class="metric"><span>Hit Ratio</span><strong id="hitRatio">—</strong></div>
+    <div class="metric"><span>Fault Ratio</span><strong id="faultRatio">—</strong></div>
+    <div class="metric"><span>Execution Time</span><strong id="time">—</strong></div>
+    <div class="metric"><span>Steps Shown</span><strong id="steps">0</strong></div>
+    <div class="metric"><span>Memory Frames</span><strong id="framesCount">—</strong></div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>3. Algorithm Comparison</h2>
+  <div id="comparison" class="comparison">
+    <p class="muted">Start a simulation to see the results.</p>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>4. Step-by-Step Page Trace</h2>
+  <p class="muted">
+    Each row shows the requested page, memory contents,
+    hit or fault, and replaced page.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Step</th>
+          <th>Requested Page</th>
+          <th>Memory Frames</th>
+          <th>Status</th>
+          <th>Replaced Page</th>
+          <th>Policy</th>
+        </tr>
+      </thead>
+      <tbody id="traceBody">
+        <tr><td colspan="6">No simulation yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>5. Adaptive Policy Learning Log</h2>
+  <div class="learning" id="learningLog">
+    The Adaptive option uses a simplified score-based rule to choose
+    between LRU and MRU. It is an educational prototype, not a
+    reproduction of the research paper's complete learning system.
+  </div>
+</section>
+
+<section class="panel">
+  <h2>6. How to Interpret Results</h2>
+  <ul>
+    <li><b>Page Hit:</b> The requested page is already in memory.</li>
+    <li><b>Page Fault:</b> The requested page is not in memory.</li>
+    <li><b>FIFO:</b> Replaces the page that entered memory first.</li>
+    <li><b>LRU:</b> Replaces the page that was used least recently.</li>
+    <li><b>MRU:</b> Replaces the page that was used most recently.</li>
+    <li><b>Hit Ratio:</b> Hits divided by total requests, multiplied by 100.</li>
+    <li><b>Fault Ratio:</b> Faults divided by total requests, multiplied by 100.</li>
+  </ul>
+</section>
+
+</main>
+
+<footer>
+  Educational simulator. This project models page replacement;
+  it does not change your computer's actual memory management.
+</footer>
+
+<script>
+"use strict";
+
+let runs = {};
+let selectedAlgorithm = "COMPARE";
+let visibleSteps = 0;
+let frameCount = 3;
+
+function getInput() {
+  const rawFrames = document.getElementById("frameCount").value.trim();
+  const count = Number(rawFrames);
+
+  if (!rawFrames || !Number.isInteger(count) || count < 1 || count > 20) {
+    throw new Error("Memory frames must be a whole number from 1 to 20.");
+  }
+
+  const rawPages = document.getElementById("reference").value.trim();
+
+  if (!rawPages) {
+    throw new Error("Please enter a page reference string.");
+  }
+
+  const parts = rawPages.split(/[,\s]+/).filter(Boolean);
+
+  if (!parts.every(value => /^\d+$/.test(value))) {
+    throw new Error("Use non-negative page numbers separated by spaces or commas.");
+  }
+
+  const pages = parts.map(Number);
+
+  if (!pages.every(Number.isSafeInteger)) {
+    throw new Error("One or more page numbers are too large.");
+  }
+
+  return { count, pages };
+}
+
+function simulate(pages, capacity, algorithm) {
+  const memory = [];
+  const lastUsed = new Map();
+  const trace = [];
+  const learningLog = [];
+
+  let hits = 0;
+  let faults = 0;
+  let fifoPointer = 0;
+  let lruScore = 0;
+  let mruScore = 0;
+
+  const startTime = performance.now();
+
+  pages.forEach((page, index) => {
+    let status;
+    let replaced = "-";
+    let policy = algorithm;
+
+    if (memory.includes(page)) {
+      hits++;
+      status = "HIT";
+    } else {
+      faults++;
+      status = "FAULT";
+
+      if (memory.length < capacity) {
+        memory.push(page);
+      } else {
+        let victim;
+
+        if (algorithm === "FIFO") {
+          victim = memory[fifoPointer];
+          memory[fifoPointer] = page;
+          fifoPointer = (fifoPointer + 1) % capacity;
+        } else {
+          if (algorithm === "LRU") {
+            policy = "LRU";
+          } else if (lruScore === mruScore) {
+            policy = index % 2 === 0 ? "LRU" : "MRU";
+          } else {
+            policy = lruScore > mruScore ? "LRU" : "MRU";
+          }
+
+          if (policy === "LRU") {
+            victim = memory.reduce((oldest, candidate) =>
+              lastUsed.get(candidate) < lastUsed.get(oldest)
+                ? candidate : oldest
+            );
+          } else {
+            victim = memory.reduce((newest, candidate) =>
+              lastUsed.get(candidate) > lastUsed.get(newest)
+                ? candidate : newest
+            );
+          }
+
+          memory[memory.indexOf(victim)] = page;
+        }
+
+        replaced = victim;
+
+        if (algorithm === "ADAPTIVE") {
+          const nextPage = pages[index + 1];
+
+          if (nextPage !== undefined) {
+            const nextIsHit = memory.includes(nextPage);
+
+            if (policy === "LRU") lruScore += nextIsHit ? 1 : 0;
+            else mruScore += nextIsHit ? 1 : 0;
+
+            if (!nextIsHit) {
+              if (policy === "LRU") mruScore += 0.25;
+              else lruScore += 0.25;
+            }
+
+            learningLog.push(
+              "Step " + (index + 1) + ": " + policy +
+              " replaced page " + victim +
+              ". Next request " + nextPage +
+              (nextIsHit ? " is a hit." : " is a fault.") +
+              " Scores — LRU: " + lruScore.toFixed(2) +
+              ", MRU: " + mruScore.toFixed(2) + "."
+            );
+          }
+        }
+      }
+    }
+
+    lastUsed.set(page, index);
+
+    trace.push({
+      step: index + 1,
+      page,
+      memory: [...memory],
+      status,
+      replaced,
+      policy
+    });
+  });
+
+  const elapsed = performance.now() - startTime;
+
+  return {
+    algorithm,
+    trace,
+    hits,
+    faults,
+    total: pages.length,
+    hitRatio: hits / pages.length * 100,
+    faultRatio: faults / pages.length * 100,
+    elapsed,
+    learningLog
+  };
+}
+
+function formatTime(ms) {
+  return ms < 1 ? ms.toFixed(3) + " ms" : ms.toFixed(2) + " ms";
+}
+
+function showSummary(result, count, shown) {
+  document.getElementById("requests").textContent = result.total;
+  document.getElementById("hits").textContent = result.hits;
+  document.getElementById("faults").textContent = result.faults;
+  document.getElementById("hitRatio").textContent =
+    result.hitRatio.toFixed(2) + "%";
+  document.getElementById("faultRatio").textContent =
+    result.faultRatio.toFixed(2) + "%";
+  document.getElementById("time").textContent = formatTime(result.elapsed);
+  document.getElementById("steps").textContent = shown + " / " + result.total;
+  document.getElementById("framesCount").textContent = count;
+}
+
+function showComparison(results) {
+  const names = {
+    FIFO: "FIFO",
+    LRU: "LRU",
+    ADAPTIVE: "Adaptive LRU/MRU"
+  };
+
+  document.getElementById("comparison").innerHTML =
+    Object.values(results).map(result => `
+      <div class="algo">
+        <h3>${names[result.algorithm]}</h3>
+        <p><b>Page faults:</b> ${result.faults}</p>
+        <p><b>Page hits:</b> ${result.hits}</p>
+        <p><b>Hit ratio:</b> ${result.hitRatio.toFixed(2)}%</p>
+        <p><b>Fault ratio:</b> ${result.faultRatio.toFixed(2)}%</p>
+        <p><b>Execution time:</b> ${formatTime(result.elapsed)}</p>
+      </div>
+    `).join("");
+}
+
+function showTrace(result, count) {
+  const body = document.getElementById("traceBody");
+  const rows = result.trace.slice(0, count);
+
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="6">No steps to display.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = rows.map(row => {
+    const frameHTML = [];
+
+    for (let i = 0; i < frameCount; i++) {
+      const value = row.memory[i] === undefined ? "—" : row.memory[i];
+      frameHTML.push('<span class="frame">' + value + '</span>');
+    }
+
+    return `
+      <tr>
+        <td>${row.step}</td>
+        <td>${row.page}</td>
+        <td>${frameHTML.join("")}</td>
+        <td class="${row.status === "HIT" ? "hit" : "fault"}">${row.status}</td>
+        <td>${row.replaced}</td>
+        <td>${row.policy}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function showLearning(result) {
+  const target = document.getElementById("learningLog");
+
+  if (result.algorithm !== "ADAPTIVE") {
+    target.textContent =
+      "Select Adaptive or Compare All to view the adaptive policy's score updates.";
+    return;
+  }
+
+  if (!result.learningLog.length) {
+    target.textContent =
+      "No replacements were needed, so the adaptive scores did not change.";
+    return;
+  }
+
+  target.innerHTML =
+    "<ol>" + result.learningLog.map(line =>
+      "<li>" + line + "</li>"
+    ).join("") + "</ol>" +
+    "<p>This is a simplified learning-inspired heuristic, not the complete " +
+    "reinforcement-learning method described in the research paper.</p>";
+}
+
+function runSimulation() {
+  const errorBox = document.getElementById("errorBox");
+  errorBox.style.display = "none";
+
+  try {
+    const input = getInput();
+    frameCount = input.count;
+    selectedAlgorithm = document.getElementById("algorithm").value;
+
+    const allResults = {
+      FIFO: simulate(input.pages, frameCount, "FIFO"),
+      LRU: simulate(input.pages, frameCount, "LRU"),
+      ADAPTIVE: simulate(input.pages, frameCount, "ADAPTIVE")
+    };
+
+    runs = selectedAlgorithm === "COMPARE"
+      ? allResults
+      : { [selectedAlgorithm]: allResults[selectedAlgorithm] };
+
+    visibleSteps = 1;
+
+    const selected = selectedAlgorithm === "COMPARE"
+      ? allResults.FIFO
+      : allResults[selectedAlgorithm];
+
+    showSummary(selected, frameCount, visibleSteps);
+    showComparison(runs);
+    showTrace(selected, visibleSteps);
+    showLearning(allResults.ADAPTIVE);
+
+    document.getElementById("status").textContent =
+      "Simulation completed. Selected algorithm: " + selectedAlgorithm + ".";
+  } catch (error) {
+    errorBox.textContent = error.message;
+    errorBox.style.display = "block";
+  }
+}
+
+function getSelectedResult() {
+  return selectedAlgorithm === "COMPARE" ? runs.FIFO : runs[selectedAlgorithm];
+}
+
+document.getElementById("runBtn").addEventListener("click", runSimulation);
+
+document.getElementById("stepBtn").addEventListener("click", () => {
+  if (!Object.keys(runs).length) {
+    runSimulation();
+    return;
+  }
+
+  const result = getSelectedResult();
+  if (visibleSteps < result.total) visibleSteps++;
+
+  showTrace(result, visibleSteps);
+  showSummary(result, frameCount, visibleSteps);
+});
+
+document.getElementById("traceBtn").addEventListener("click", () => {
+  if (!Object.keys(runs).length) runSimulation();
+  if (!Object.keys(runs).length) return;
+
+  const result = getSelectedResult();
+  visibleSteps = result.total;
+
+  showTrace(result, visibleSteps);
+  showSummary(result, frameCount, visibleSteps);
+});
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+  document.getElementById("frameCount").value = 3;
+  document.getElementById("reference").value = "1 2 3 1 4 2 5 1 2 3";
+  document.getElementById("algorithm").value = "COMPARE";
+  document.getElementById("errorBox").style.display = "none";
+
+  runs = {};
+  visibleSteps = 0;
+  selectedAlgorithm = "COMPARE";
+  frameCount = 3;
+
+  ["requests", "hits", "faults", "hitRatio", "faultRatio", "time",
+   "framesCount"].forEach(id => {
+    document.getElementById(id).textContent = "—";
+  });
+
+  document.getElementById("steps").textContent = "0";
+  document.getElementById("status").textContent =
+    "Enter your inputs and start the simulation.";
+  document.getElementById("comparison").innerHTML =
+    '<p class="muted">Start a simulation to see the results.</p>';
+  document.getElementById("traceBody").innerHTML =
+    '<tr><td colspan="6">No simulation yet.</td></tr>';
+  document.getElementById("learningLog").textContent =
+    "The Adaptive option uses a simplified score-based rule to choose " +
+    "between LRU and MRU. It is an educational prototype, not a reproduction " +
+    "of the research paper's complete learning system.";
+});
+</script>
+
+</body>
+</html>
